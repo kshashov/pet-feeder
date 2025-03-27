@@ -55,7 +55,8 @@ Preferences preferences;
 
 // App specific
 const int menuTimeout = 15;  
-const int feedingTriggerMinutes = 5;
+const int feedingTriggerMinutes = 4;
+bool ignoreClick = false;
 
 enum menuModes {
   off,                                  // display is off
@@ -125,8 +126,8 @@ void setup() {
   time3Triggered = preferences.getBool("time3Triggered", false);
   portion = preferences.getUInt("portion", 1);
 
-  String items[5] = { "Feed Now", "Feed #1", "Feed #2", "Feed #3", "Amount" };
-  initMenu(5, items);
+  String items[6] = { "Feed Now", "Feed #1", "Feed #2", "Feed #3", "Amount", "Time" };
+  initMenu(6, items);
   offMenu();                      // clear any previous menu
   resetFutureFeedTimers();
 }
@@ -142,24 +143,31 @@ void initMenu(int _noOfElements, String *_list) {
 void loop() {
   readEncoder();     // update rotary encoder button status (if pressed activate default menu)
   renderMenu();         // update or action the oled menu
+
+  RtcDateTime dt = getTime();
+  int currentTime = dt.Hour()*60+dt.Minute();
+  if (currentTime < 5) {
+    resetFutureFeedTimers();
+  }
+
   feedIfTime();       // feed if time near presets [time, time+5min]
 }
 
 void initClock() {
   Rtc.Begin();
-  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+
   // if (!Rtc.IsDateTimeValid()) {
     // Common Causes:
     //    1) first time you ran and the device wasn't running yet
     //    2) the battery on the device is low or even missing
-    Serial.println("RTC lost confidence in the DateTime!");
-    Rtc.SetDateTime(compiled);
+    // Serial.println("RTC lost confidence in the DateTime!");
   // }
-  // RtcDateTime now = Rtc.GetDateTime();
-  // if (now < compiled) {
+  RtcDateTime now = Rtc.GetDateTime();
+  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+  if (now < compiled) {
   //   Serial.println("RTC is older than compile time!  (Updating DateTime)");
-  //   Rtc.SetDateTime(compiled);
-  // } else if (now > compiled) {
+    Rtc.SetDateTime(compiled);
+  } //else if (now > compiled) {
   //   Serial.println("RTC is newer than compile time. (this is expected)");
   // } else if (now == compiled) {
   //   Serial.println("RTC is the same as compile time! (not expected but all is fine)");
@@ -171,11 +179,14 @@ void readEncoder() {
   if (tReading != rotaryEncoder.encoderPrevButton) rotaryEncoder.reLastButtonChange = millis();     // if it has changed reset timer
   if ((unsigned long)(millis() - rotaryEncoder.reLastButtonChange) > rotaryEncoder.reDebounceDelay ) {  // if button state is stable
     if (rotaryEncoder.encoderPrevButton == rotaryEncoder.reButtonPressedState) {
+      // Serial.println("if (rotaryEncoder.encoderPrevButton == rotaryEncoder.reButtonPressedState) {");
       if (rotaryEncoder.reButtonDebounced == 0) {    // if the button has been pressed
         rotaryEncoder.reButtonPressed = 1;           // flag set when the button has been pressed
+        // Serial.println("if (rotaryEncoder.reButtonDebounced == 0)");
         if (menuMode == off) {
-          delay(1000);
+          // Serial.println("if (menuMode == off)");
           // if the display is off start the default menu
+          ignoreClick = true;
           menuMode = main;                  // enable menu mode   
           rotaryEncoder.encoderPrevButton = tReading;
           return;       
@@ -184,6 +195,7 @@ void readEncoder() {
       rotaryEncoder.reButtonDebounced = 1;           // debounced button status  (1 when pressed)
     } else {
       rotaryEncoder.reButtonDebounced = 0;
+      ignoreClick = false;
     }
   }
   rotaryEncoder.encoderPrevButton = tReading;            // update last state read
@@ -263,7 +275,7 @@ void showMenu() {
   }
  
   bool isOpened = false;
-  if (rotaryEncoder.reButtonDebounced == 1) {
+  if ((rotaryEncoder.reButtonDebounced == 1) && !ignoreClick) {
     menu.openedItem = menu.selectedItem;     // flag that the item has been selected
     rotaryEncoder.reButtonPressed = 0;
     rotaryEncoder.reButtonDebounced = 0;
@@ -280,10 +292,7 @@ void showMenuItems(bool somethingIsOpened) {
   lcd.setCursor(0,0);
 
   String item = menu.items[menu.selectedItem];
-  if (menu.selectedItem == 1) {
-    // Add time for manual feeding
 
-  }
   if (menu.openedItem == menu.selectedItem) {
     item = "[" + item + "]";
   }
@@ -302,7 +311,24 @@ void onSelected() {
   int selected = menu.selectedItem;
   if (selected == 1) {
     // printLn("Feed Now"); 
-    printLn(getStringDateTime());
+    String now = getStringTime();
+    if (time1Triggered) {
+      now += " [+ ";
+    } else {
+      now += " [- ";
+    }
+    if (time2Triggered) {
+      now += "+ ";
+    } else {
+      now += "- ";
+    }
+    if (time3Triggered) {
+      now += "+]";
+    } else {
+      now += "-]";
+    }
+
+    printLn(now);
   } else if (selected == 2) {
     if (time1 == 0) {
       printLn("OFF");
@@ -324,7 +350,10 @@ void onSelected() {
   } else if (selected == 5) {
     // portion size
     printLn(portion); 
-  } 
+  } else if (selected == 6) {
+    // current time
+    printLn(getStringTime());
+  }
 }
 
 void onOpened() {
@@ -332,22 +361,36 @@ void onOpened() {
   // show opened menu item at bottom
   int opened = menu.openedItem;
   if (opened == 1) {
-    printLn("YUMMY");
     feed();
   } else if (opened == 2) {
-    time1 = enterFeedingTime(time1);
+    time1 = enterFeedingTime(time1, 5);
     preferences.putUInt("time1", time1);
+    time1Triggered = false;
+    preferences.putBool("time1Triggered", time1Triggered);
   } else if (opened == 3) {
-    time2 = enterFeedingTime(time2); 
+    time2 = enterFeedingTime(time2, 5); 
+    time2Triggered = false;
+    preferences.putBool("time2Triggered", time3Triggered);
     preferences.putUInt("time2", time2);
   } else if (opened == 4) {
-    time3 = enterFeedingTime(time3); 
+    time3 = enterFeedingTime(time3, 5); 
+    time3Triggered = false;
+    preferences.putBool("time3Triggered", time3Triggered);
     preferences.putUInt("time3", time3);
   } else if (opened == 5) {
     // Enter portion size
     portion = enterAmount(portion);
     preferences.putUInt("portion", portion);
-  } 
+  } else if (opened == 6) {
+    RtcDateTime dt = getTime();
+    int time = dt.Hour() * 60 + dt.Minute();
+    int newTime = enterFeedingTime(time, 1);
+    int hours = newTime / 60;
+    int minutes = newTime % 60;
+    RtcDateTime dateTime = Rtc.GetDateTime();
+    RtcDateTime newDateTime = RtcDateTime(dateTime.Year(), dateTime.Month(), dateTime.Day(), hours, minutes, 0);
+    Rtc.SetDateTime(newDateTime);
+  }
 
   menu.openedItem = 0; 
   menuMode = main;
@@ -363,19 +406,18 @@ int enterAmount(int current) {
   return current;        
 }
 
-int enterFeedingTime(int current) {
+int enterFeedingTime(int current, int step) {
   menuMode = blocking;
   menu.lastMenuActivity = millis();  
 
-  current = enterTime(current, 1, 0);
+  current = enterTime(current, step, 1, 0);
   
   return current;
 }
 
-int enterTime(int current, int cursorV, int cursorH) {
+int enterTime(int current, int step, int cursorV, int cursorH) {
   const int low = 0;
   const int high = 1435;
-  const int step = 5; 
   uint32_t tTime;
   delay(500);
   rotaryEncoder.reButtonPressed = 0;
@@ -498,8 +540,10 @@ void feedIfTime() {
   RtcDateTime dt = getTime();
   int currentTime = dt.Hour() * 60 + dt.Minute();
 
+
+  int delta = currentTime - time1;
   if (time1 != 0) { 
-    if (0 <= (currentTime - time1) <= feedingTriggerMinutes) {
+    if ((delta >= 0) && (delta <= feedingTriggerMinutes)) {
       if (!time1Triggered) {
         feed();
         time1Triggered = true;
@@ -508,8 +552,9 @@ void feedIfTime() {
     }
   }
 
+  delta = currentTime - time2;
   if (time2 != 0) {
-    if (0 <= (currentTime - time2) <= feedingTriggerMinutes) {
+    if ((delta >= 0) && (delta <= feedingTriggerMinutes)) {
       if (!time2Triggered) {
         feed();
         time2Triggered = true;
@@ -518,8 +563,9 @@ void feedIfTime() {
     }
   }
 
+  delta = currentTime - time3;
   if (time3 != 0) { 
-    if (0 <= (currentTime - time3) <= feedingTriggerMinutes) {
+    if ((delta >= 0) && (delta <= feedingTriggerMinutes)) {
       if (!time3Triggered) {
         feed();
         time3Triggered = true;
@@ -545,22 +591,35 @@ void resetFutureFeedTimers() {
     time3Triggered = false;
     preferences.putBool("time3Triggered", time3Triggered);
   }
-  // TODO time2 time3
 }
 
+
 void feed() {
+  menu.lastMenuActivity = millis();
   byte mult = 1;
+  lcd.setCursor(0,0);
+  lcd.backlight();
+  printLn("FEED");
   for (int i = 0; i < portion; i++) {
+    menu.lastMenuActivity = millis();
+    lcd.setCursor(0,1);
+    printLn("Portion " + String(i + 1) + " / " + String(portion));
+
     delay(10);
-    stepper.step(mult*256);
-    stepper.step(-mult*1024);
+    stepper.step(mult*128);
+    stepper.step(-mult*512);
     delay(10);
 
-    stepper.step(mult*256);
-    stepper.step(-mult*1024);
+    stepper.step(mult*128);
+    stepper.step(-mult*512);
+    
     delay(10);
   }
 
+  if (menuMode == off) {
+    // feed is enabled by timer -> go off
+    offMenu();
+  }
   // digitalWrite(LED_B, HIGH);  // turn the LED on (HIGH is the voltage level)
   // delay(3000);                      // wait for a second
   // digitalWrite(LED_B, LOW);   // turn the LED off by making the voltage LOW
@@ -605,18 +664,16 @@ void printLn(String text) {
 }
 
 // obsolete
-String getStringDateTime() {
+String getStringTime() {
   RtcDateTime dt = getTime();
   char datestring[16];
 
   snprintf_P(datestring,
              countof(datestring),
-             PSTR("%02u/%02u %02u:%02u:%02u"),
-             dt.Day(),
-             dt.Month(),
+            //  PSTR("%02u/%02u %02u:%02u:%02u"),
+             PSTR("%02u:%02u"),
              dt.Hour(),
-             dt.Minute(),
-             dt.Second()
+             dt.Minute()
              );
   return String(datestring);
   // printLn(datestring);
