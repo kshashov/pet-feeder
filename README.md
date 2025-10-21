@@ -1,6 +1,6 @@
 # Pet Feeder
 
-![img.png](img.png | width=500)
+<img src="img.png" width="400px">
 
 ## Software
 * Arduino script
@@ -41,7 +41,7 @@
 * Features
   * Feed now
   * Add/Edit/Delete feedings 
-![img_1.png](img_1.png | width=500)
+<img src="img_1.png" width="400px">
 
 ## Hardware
 * Esp32
@@ -50,6 +50,6 @@
 * Nema17 + a4988 driver
 * MP1584EN dc dc buck converter + 5.5x2.1mm Female DC Power Plug
 
-![img_2.png](img_2.png | width=500)
-![img_3.png](img_3.png | width=500)
-![img_4.png](img_4.png | width=500)
+<img src="img_2.png" width="400px">
+<img src="img_3.png" width="400px">
+<img src="img_4.png" width="400px">
