@@ -96,7 +96,7 @@ void setup() {
   Serial.println("\n\n\nStarting menu\n");
 
   // init stepper
-  stepper.setSpeed(10);
+  stepper.setSpeed(5);
 
   // init clock
   initClock();
@@ -606,12 +606,12 @@ void feed() {
     printLn("Portion " + String(i + 1) + " / " + String(portion));
 
     delay(10);
-    stepper.step(mult*128);
-    stepper.step(-mult*512);
+    // stepper.step(mult*128);
+    stepper.step(-mult*5*512);
     delay(10);
 
-    stepper.step(mult*128);
-    stepper.step(-mult*512);
+    // stepper.step(mult*128);
+    // stepper.step(-mult*5*512);
     
     delay(10);
   }
